@@ -282,22 +282,20 @@ async function getJson(url){
 }
 
 // ---------- Parser defensivo (EA20 - resultado unificado) ----------
-function findCandNode(obj, depth=0){
-  if (!obj || typeof obj !== "object" || depth > 4) return null;
-  if (Array.isArray(obj.cand)) return obj;
-  for (const k of Object.keys(obj)){
-    const v = obj[k];
-    if (Array.isArray(v)){ for (const it of v){ const f = findCandNode(it, depth+1); if (f) return f; } }
-    else if (v && typeof v === "object"){ const f = findCandNode(v, depth+1); if (f) return f; }
-  }
-  return null;
+// EA20 (2026): carg[] > agr[] > par[] > cand[]; totais em s / e / v na raiz.
+function collectCands(obj, out, depth=0){
+  if (!obj || typeof obj !== "object" || depth > 6) return out;
+  if (Array.isArray(obj)){ obj.forEach(x => collectCands(x, out, depth+1)); return out; }
+  if (Array.isArray(obj.cand)) obj.cand.forEach(c => out.push(c));
+  for (const k of ["carg","agr","par"]) if (obj[k]) collectCands(obj[k], out, depth+1);
+  return out;
 }
 function parse(json){
-  const node = findCandNode(json) || {};
-  const pick = k => node[k] ?? json[k] ?? {};
-  const s = pick("s"), v = pick("v"), e = pick("e");
-  const cands = (node.cand || []).map((c,i) => ({
-    n: String(c.n ?? c.nr ?? i+1), nm: c.nm || c.nome || "Candidato", sq: c.sqcand || c.sq || "",
+  const s = json.s || {}, v = json.v || {}, e = json.e || {};
+  const raw = collectCands(json, []);
+  const cands = raw.map((c,i) => ({
+    n: String(c.n ?? i+1), nm: c.nmu || c.nm || "Candidato", nmFull: c.nm || "", sq: c.sqcand || "",
+    vice: (c.vs && c.vs[0] && (c.vs[0].nmu || c.vs[0].nm)) || "",
     vap: toNum(c.vap), pvap: toNum(c.pvap), pvapn: toNum(c.pvapn), st: c.st || "", e: c.e || "", dvt: c.dvt || ""
   })).filter(c => !isNaN(c.vap));
   const vv = toNum(v.vv);
@@ -312,9 +310,8 @@ function parse(json){
     ts, st, pst,
     snt: toNum(s.snt),
     vb: toNum(v.vb), pvb: toNum(v.pvb), vn: toNum(v.tvn ?? v.vn), pvn: toNum(v.ptvn ?? v.pvn), tv: toNum(v.tv),
-    ea: toNum(e.e ?? e.ea), c: toNum(e.c), pc: toNum(e.pc), a: toNum(e.a), pa: toNum(e.pa),
-    dg: json.dg || node.dg || "", hg: json.hg || node.hg || "", and: json.and || node.and || "",
-    md: json.md || node.md || "", f: json.f || node.f || "",
+    ea: toNum(e.est ?? e.e), te: toNum(e.te), c: toNum(e.c), pc: toNum(e.pc), a: toNum(e.a), pa: toNum(e.pa),
+    dg: json.dg || "", hg: json.hg || "", and: json.and || "",
     key: `${json.dg||""} ${json.hg||""}`.trim()
   };
 }
@@ -368,7 +365,7 @@ function renderBoard(d){
       <div class="photo"><span>${c.n}</span></div>
       <div style="min-width:0">
         <div class="nm">${c.nm} ${status}</div>
-        <div class="party">${c.n} · ${partyOf(c.n) || (c.dvt||"")}</div>
+        <div class="party">${c.n} · ${partyOf(c.n) || (c.dvt||"")}${c.vice?` · vice: ${c.vice}`:""}</div>
         <div class="pct">${fmtPct(c.pct)}</div>
         <div class="votes">${fmtInt(c.vap)} votos</div>
         <div class="bar"><i style="width:${Math.min(100,c.pct).toFixed(2)}%"></i></div>
@@ -417,7 +414,7 @@ function renderBoard(d){
   $("t-vn").textContent = fmtInt(d.vn); $("t-vn-p").textContent = !isNaN(d.pvn)?fmtPct(d.pvn):pOf(d.vn,tv);
   $("t-c").textContent = fmtInt(d.c); $("t-c-p").textContent = !isNaN(d.pc)?fmtPct(d.pc):pOf(d.c,d.ea);
   $("t-a").textContent = fmtInt(d.a); $("t-a-p").textContent = !isNaN(d.pa)?fmtPct(d.pa):pOf(d.a,d.ea);
-  $("t-e").textContent = fmtInt(d.ea); $("t-e-p").textContent = "nas seções totalizadas";
+  $("t-e").textContent = fmtInt(d.ea); $("t-e-p").textContent = !isNaN(d.te) ? `de ${fmtInt(d.te)} no total` : "nas seções totalizadas";
 }
 
 // ---------- Render: gráfico + timeline ----------
