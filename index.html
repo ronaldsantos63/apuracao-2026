@@ -125,7 +125,9 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--c22);outline-o
 .stacklegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
 .regions{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:12px}
 .region{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
-.region .r{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.85rem;margin-top:4px}
+.region .hd{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.region .r{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-family:var(--mono);font-size:.85rem;margin-top:6px}
+.region .r span:last-child{text-align:right}
 .region .bar{height:6px;display:flex;gap:2px;border-radius:3px;overflow:hidden;margin-top:6px;background:var(--surface-2)}
 .region .bar i{display:block;height:100%}
 details summary{cursor:pointer;color:var(--fg-2);font-size:.85rem;margin-top:10px}
@@ -350,7 +352,7 @@ function parse(json){
 // ---------- Estado ----------
 let uf = "br";
 try { const saved = localStorage.getItem("apuracao2026:uf"); if (saved && NAME[saved]) uf = saved; } catch(_){}
-let timer = null, nextAt = 0, chart = null, chartLead = null, chartUf = null, lastKey = "", ufsTimer = null;
+let timer = null, nextAt = 0, chart = null, chartLead = null, chartUf = null, lastKey = "", ufsTimer = null, fails = 0;
 
 // ---------- UI: seletor ----------
 const sel = $("uf");
@@ -494,11 +496,12 @@ function drawChart(h){
   $("legend").innerHTML = datasets.map(d => `<span><i style="background:${d.borderColor}"></i>${d.label}</span>`).join("");
   const all = datasets.flatMap(d => d.data.map(p=>p.y)).filter(v=>v!=null);
   const lo = all.length ? Math.floor(Math.min(...all)) - 1 : 40, hi = all.length ? Math.ceil(Math.max(...all)) + 1 : 60;
-  const xmax = xs.length ? Math.max(100, ...xs) : 100;
+  const xmin = xs.length ? Math.max(0, Math.floor(Math.min(...xs))) : 0;
+  const xmax = xs.length ? Math.min(100, Math.ceil(Math.max(...xs)) + 1) : 100;
   const tipTitle = items => { const p = h[items[0].dataIndex]; return p ? `${p.k} · ${fmtPct(p.pst)} das seções` : ""; };
   const common = { responsive:true, maintainAspectRatio:false, animation:{duration:300}, interaction:{mode:"index", intersect:false},
     plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title: tipTitle } } },
-    scales:{ x:{ type:"linear", min:0, max:xmax, ticks:{color:textCol, maxTicksLimit:11, callback:v=>v+"%"}, grid:{color:grid} } } };
+    scales:{ x:{ type:"linear", min:xmin, max:Math.max(xmax, xmin+2), ticks:{color:textCol, maxTicksLimit:11, callback:v=>v+"%"}, grid:{color:grid} } } };
   const opts = JSON.parse(JSON.stringify(common));
   opts.plugins.tooltip.callbacks = { title: tipTitle, label: it => ` ${it.dataset.label}: ${fmtPct(it.parsed.y)}` };
   opts.scales.y = { min:lo, max:hi, ticks:{color:textCol, callback:v=>v+"%"}, grid:{color:grid} };
@@ -569,8 +572,8 @@ async function loadUfs(){
     ufs.forEach(u => { const d = byUf[u]; if (!d) return; v13+=vapOf(d,"13"); v22+=vapOf(d,"22"); vv+=d.validos; st+=d.st; ts+=d.ts; });
     const p13 = vv>0 ? v13/vv*100 : 0, p22 = vv>0 ? v22/vv*100 : 0, pst = ts>0 ? st/ts*100 : 0;
     const lead = p13>p22 ? c13 : p22>p13 ? c22 : "inherit";
-    return `<div class="region"><div class="label">${nm} <span class="num" style="float:right">${fmtPct(pst,1)} urnas</span></div>
-      <div class="r"><span style="color:${c13}">Lula ${fmtPct(p13)}</span><span style="color:${c22}">Flávio ${fmtPct(p22)}</span></div>
+    return `<div class="region"><div class="hd"><span class="label">${nm}</span><span class="small muted num">${fmtPct(pst,1)} urnas</span></div>
+      <div class="r"><span style="color:${c13}">Lula<br>${fmtPct(p13)}</span><span style="color:${c22}">Flávio<br>${fmtPct(p22)}</span></div>
       <div class="bar"><i style="width:${p13.toFixed(2)}%;background:${c13}"></i><i style="width:${p22.toFixed(2)}%;background:${c22}"></i></div>
       <div class="small num" style="color:${lead};margin-top:4px">${p13===p22?"empate":(p13>p22?"Lula":"Flávio")} +${Math.abs(p13-p22).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp</div></div>`;
   }).join("");
@@ -617,11 +620,13 @@ async function update(manual){
     const json = await getJson(fileUrl(uf, ELE_FED, CARGO_PRES));
     const d = parse(json);
     if (!d.cands.length) throw new Error("arquivo sem candidatos");
-    alertBox("");
+    fails = 0; alertBox("");
     renderBoard(d);
     if (d.key !== lastKey){ lastKey = d.key; if (pushHist(d) || manual) renderHistory(); else renderHistory(); }
     updateGov();
   } catch (e) {
+    fails++;
+    if (fails < 2){ nextAt = Date.now() + 5000; timer = setTimeout(update, 5000); return; }
     live.className = "live off"; $("liveTxt").textContent = "sem conexão";
     const cors = /Failed to fetch|NetworkError|Load failed/i.test(String(e.message));
     alertBox(cors
