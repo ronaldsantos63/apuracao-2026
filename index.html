@@ -116,6 +116,19 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--c22);outline-o
 @media (max-width:820px){.two{grid-template-columns:1fr}}
 
 /* Table */
+.chartbox.short{height:200px}
+.chartbox.tall{height:640px}
+.stack{display:flex;height:18px;border-radius:9px;overflow:hidden;gap:2px;background:var(--surface-2)}
+.stack i{display:block;height:100%}
+.stacklegend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--fg-2);margin-top:8px}
+.stacklegend b{font-family:var(--mono);font-weight:600;color:var(--fg)}
+.stacklegend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}
+.regions{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:12px}
+.region{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.region .r{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.85rem;margin-top:4px}
+.region .bar{height:6px;display:flex;gap:2px;border-radius:3px;overflow:hidden;margin-top:6px;background:var(--surface-2)}
+.region .bar i{display:block;height:100%}
+details summary{cursor:pointer;color:var(--fg-2);font-size:.85rem;margin-top:10px}
 .tablewrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.85rem;min-width:560px}
 th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -179,6 +192,12 @@ footer a{color:var(--fg-2)}
     </div>
   </section>
 
+  <section class="card">
+    <div class="card-head"><h2>Composição dos votos</h2><span class="small muted num" id="compTotal">—</span></div>
+    <div class="stack" id="stack"></div>
+    <div class="stacklegend" id="stackLegend"></div>
+  </section>
+
   <section class="tiles" id="tiles">
     <div class="tile"><span class="label">Votos válidos</span><b class="num" id="t-vv">—</b><span class="sub" id="t-vv-p"></span></div>
     <div class="tile"><span class="label">Brancos</span><b class="num" id="t-vb">—</b><span class="sub" id="t-vb-p"></span></div>
@@ -186,14 +205,18 @@ footer a{color:var(--fg-2)}
     <div class="tile"><span class="label">Comparecimento</span><b class="num" id="t-c">—</b><span class="sub" id="t-c-p"></span></div>
     <div class="tile"><span class="label">Abstenção</span><b class="num" id="t-a">—</b><span class="sub" id="t-a-p"></span></div>
     <div class="tile"><span class="label">Eleitorado apto</span><b class="num" id="t-e">—</b><span class="sub" id="t-e-p"></span></div>
+    <div class="tile"><span class="label">Seções não instaladas</span><b class="num" id="t-sni">—</b><span class="sub" id="t-sni-p"></span></div>
+    <div class="tile"><span class="label">Votos anulados</span><b class="num" id="t-van">—</b><span class="sub" id="t-van-p"></span></div>
   </section>
 
   <section class="two">
     <div class="card">
-      <div class="card-head"><h2>Evolução dos votos válidos</h2><span class="small muted">um ponto por atualização do TSE</span></div>
+      <div class="card-head"><h2>Evolução dos votos válidos</h2><span class="small muted">eixo: % de seções apuradas · um ponto por atualização</span></div>
       <div class="legend" id="legend"></div>
       <div class="chartbox"><canvas id="chart" role="img" aria-label="Percentual de votos válidos por candidato ao longo da apuração"></canvas></div>
       <p class="small muted" id="chartEmpty">O histórico começa quando esta página captura a primeira atualização. Ele fica salvo neste navegador.</p>
+      <div class="card-head" style="margin-top:14px"><h2>Vantagem do líder</h2><span class="small muted">pontos percentuais · acima de zero = Lula, abaixo = Flávio</span></div>
+      <div class="chartbox short"><canvas id="chartLead" role="img" aria-label="Diferença em pontos percentuais entre os candidatos ao longo da apuração"></canvas></div>
     </div>
     <div class="card">
       <div class="card-head"><h2>Linha do tempo</h2><button class="btn-ghost small" id="clearHist">limpar</button></div>
@@ -210,17 +233,23 @@ footer a{color:var(--fg-2)}
     <div class="card-head">
       <h2>Presidente por estado</h2>
       <div class="controls">
-        <span class="small muted" id="ufsStatus">27 UFs + exterior</span>
-        <button id="loadUfs">Carregar</button>
+        <span class="small muted" id="ufsStatus">carregando 27 UFs + exterior…</span>
+        <button id="loadUfs">Atualizar</button>
       </div>
     </div>
-    <div class="tablewrap">
-      <table id="ufTable" hidden>
-        <thead><tr><th>UF</th><th>Seções</th><th>Lula</th><th>Flávio Bolsonaro</th><th>Diferença</th><th>Válidos</th><th>Horário</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <p class="small muted" id="ufHint">Busca os 28 arquivos oficiais (uma vez por clique, depois a cada 3 min enquanto a tabela estiver aberta).</p>
+    <div class="regions" id="regions"></div>
+    <div class="legend" style="margin-top:14px"><span><i style="background:var(--c13)"></i>Lula lidera</span><span><i style="background:var(--c22)"></i>Flávio lidera</span><span class="muted">barra = diferença em pp · ordenado pela diferença</span></div>
+    <div class="chartbox tall"><canvas id="chartUf" role="img" aria-label="Diferença em pontos percentuais entre os candidatos por estado"></canvas></div>
+    <details>
+      <summary>Tabela completa por UF</summary>
+      <div class="tablewrap">
+        <table id="ufTable">
+          <thead><tr><th>UF</th><th>Seções</th><th>Lula</th><th>Flávio Bolsonaro</th><th>Diferença</th><th>Válidos</th><th>Horário</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </details>
+    <p class="small muted">Atualiza a cada 3 min (28 arquivos oficiais). O Exterior entra na tabela, mas não nas regiões.</p>
   </section>
 
   <section class="card">
@@ -234,7 +263,7 @@ footer a{color:var(--fg-2)}
 
   <footer>
     Dados lidos diretamente dos arquivos JSON públicos do TSE em <a href="https://resultados.tse.jus.br/oficial/app/index.html" target="_blank" rel="noopener">resultados.tse.jus.br</a>
-    (arquivo de resultado unificado, eleições 6258 e 6260). Nada é estimado, exceto o card "votos ainda não apurados", que é uma projeção simples desta página.
+    (arquivo de resultado unificado, eleições 6258 e 6260). Nada é estimado, exceto o card "votos ainda não apurados" (projeção simples desta página); "matematicamente definido" vem da flag oficial do TSE. Regiões são somas das UFs feitas aqui.
     Atualização automática a cada 30 s. Limite do TSE: 100 requisições/s por IP.
   </footer>
 </main>
@@ -308,8 +337,10 @@ function parse(json){
   return {
     cands, validos, vv,
     ts, st, pst,
-    snt: toNum(s.snt),
+    snt: toNum(s.snt), sni: toNum(s.sni), si: toNum(s.si),
     vb: toNum(v.vb), pvb: toNum(v.pvb), vn: toNum(v.tvn ?? v.vn), pvn: toNum(v.ptvn ?? v.pvn), tv: toNum(v.tv),
+    van: toNum(v.van), vansj: toNum(v.vansj),
+    md: json.md === "s", tf: json.tf === "s",
     ea: toNum(e.est ?? e.e), te: toNum(e.te), c: toNum(e.c), pc: toNum(e.pc), a: toNum(e.a), pa: toNum(e.pa),
     dg: json.dg || "", hg: json.hg || "", and: json.and || "",
     key: `${json.dg||""} ${json.hg||""}`.trim()
@@ -319,7 +350,7 @@ function parse(json){
 // ---------- Estado ----------
 let uf = "br";
 try { const saved = localStorage.getItem("apuracao2026:uf"); if (saved && NAME[saved]) uf = saved; } catch(_){}
-let timer = null, nextAt = 0, chart = null, lastKey = "", ufsTimer = null, estAbr = null;
+let timer = null, nextAt = 0, chart = null, chartLead = null, chartUf = null, lastKey = "", ufsTimer = null;
 
 // ---------- UI: seletor ----------
 const sel = $("uf");
@@ -395,12 +426,14 @@ function renderBoard(d){
     const perSec = d.st>0 ? d.validos/d.st : 0;
     const remainEst = remainSec*perSec;
     $("remainEst").textContent = final ? "0" : "≈ " + fmtInt(remainEst);
-    let txt, cls;
-    if (final) { txt = `${leader.nm} venceu`; cls="ok"; }
+    let txt, cls, note = "estimativa própria, não oficial";
+    if (final) { txt = `${leader.nm} venceu`; cls="ok"; note = "totalização final do TSE"; }
+    else if (d.md) { txt = `Matematicamente definido: ${leader.nm}`; cls="ok"; note = "flag oficial do TSE (md)"; }
     else if (diffV > remainEst) { txt = "Virada matematicamente improvável"; cls="ok"; }
     else if (d.pst > 50 && diffV > remainEst*0.5) { txt = "Vantagem consistente"; cls=""; }
     else { txt = "Disputa aberta"; cls="warn"; }
     $("mathStatus").innerHTML = `<span class="pill ${cls}">${txt}</span>`;
+    $("mathNote").textContent = note;
   } else {
     ["leadVotes","leadPp","remainEst"].forEach(id=>$(id).textContent="—");
     $("mathStatus").innerHTML = `<span class="pill">aguardando urnas</span>`;
@@ -415,6 +448,18 @@ function renderBoard(d){
   $("t-c").textContent = fmtInt(d.c); $("t-c-p").textContent = !isNaN(d.pc)?fmtPct(d.pc):pOf(d.c,d.ea);
   $("t-a").textContent = fmtInt(d.a); $("t-a-p").textContent = !isNaN(d.pa)?fmtPct(d.pa):pOf(d.a,d.ea);
   $("t-e").textContent = fmtInt(d.ea); $("t-e-p").textContent = !isNaN(d.te) ? `de ${fmtInt(d.te)} no total` : "nas seções totalizadas";
+  $("t-sni").textContent = fmtInt(d.sni); $("t-sni-p").textContent = !isNaN(d.si) ? `${fmtInt(d.si)} instaladas` : "";
+  const vanT = (d.van||0) + (d.vansj||0);
+  $("t-van").textContent = fmtInt(vanT); $("t-van-p").textContent = d.vansj>0 ? `${fmtInt(d.vansj)} sub judice` : (vanT>0 ? "pelo TSE" : "nenhum");
+
+  // composição
+  const parts = [["Válidos", d.validos, "var(--fg-2)"], ["Brancos", d.vb, "#b9b4a8"], ["Nulos", d.vn, "#7a756b"]].filter(p=>p[1]>0);
+  if (tv > 0){
+    $("compTotal").textContent = `${fmtInt(tv)} votos apurados`;
+    $("stack").innerHTML = parts.map(([n,x,c]) => `<i style="width:${(x/tv*100).toFixed(3)}%;background:${c}" title="${n}"></i>`).join("");
+    $("stackLegend").innerHTML = parts.map(([n,x,c]) => `<span><i style="background:${c}"></i>${n} <b>${fmtPct(x/tv*100)}</b></span>`).join("")
+      + (!isNaN(d.pa) ? `<span class="muted">Abstenção (fora da barra) <b>${fmtPct(d.pa)}</b></span>` : "");
+  }
 }
 
 // ---------- Render: gráfico + timeline ----------
@@ -438,58 +483,60 @@ function renderHistory(){
   drawChart(h);
 }
 function drawChart(h){
-  const ctx = $("chart").getContext("2d");
+  const textCol = cssVar("--fg-2"), grid = cssVar("--line");
   const names = {}; h.forEach(p => Object.keys(p.c).forEach(n => names[n] = p.c[n].nm || n));
   const nums = Object.keys(names).sort();
-  const textCol = cssVar("--fg-2"), grid = cssVar("--line");
+  const xs = h.map(p => p.pst);
   const datasets = nums.map((n,i) => ({
-    label: names[n], data: h.map(p => p.c[n] ? p.c[n].pct : null),
-    borderColor: colorFor(n,i), backgroundColor: colorFor(n,i), borderWidth: 2, pointRadius: h.length>60?0:3, pointHoverRadius:5, tension:.25, spanGaps:true
+    label: names[n], data: h.map(p => ({x:p.pst, y:p.c[n] ? p.c[n].pct : null})),
+    borderColor: colorFor(n,i), backgroundColor: colorFor(n,i), borderWidth: 2, pointRadius: h.length>60?0:3, pointHoverRadius:5, tension:.2, spanGaps:true
   }));
-  datasets.push({ label:"Seções totalizadas", data:h.map(p=>p.pst), borderColor:textCol, borderDash:[4,4], borderWidth:1.5, pointRadius:0, tension:.25 });
-  $("legend").innerHTML = datasets.map(d => `<span><i style="background:${d.borderColor}${d.borderDash?";height:1px;border-top:2px dashed "+d.borderColor+";background:none":""}"></i>${d.label}</span>`).join("");
-  const labels = h.map(p => p.hg ? p.hg.slice(0,5) : "");
-  if (chart){ chart.data.labels = labels; chart.data.datasets = datasets; chart.options.scales.x.ticks.color = textCol; chart.update(); return; }
-  chart = new Chart(ctx, { type:"line", data:{labels, datasets},
-    options:{ responsive:true, maintainAspectRatio:false, animation:{duration:300}, interaction:{mode:"index", intersect:false},
-      plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title: items => h[items[0].dataIndex]?.k || "", label: it => ` ${it.dataset.label}: ${fmtPct(it.parsed.y)}` } } },
-      scales:{ x:{ ticks:{color:textCol, maxTicksLimit:8, autoSkip:true}, grid:{color:grid} },
-               y:{ min:0, max:100, ticks:{color:textCol, callback:v=>v+"%"}, grid:{color:grid} } } } });
+  $("legend").innerHTML = datasets.map(d => `<span><i style="background:${d.borderColor}"></i>${d.label}</span>`).join("");
+  const all = datasets.flatMap(d => d.data.map(p=>p.y)).filter(v=>v!=null);
+  const lo = all.length ? Math.floor(Math.min(...all)) - 1 : 40, hi = all.length ? Math.ceil(Math.max(...all)) + 1 : 60;
+  const xmax = xs.length ? Math.max(100, ...xs) : 100;
+  const tipTitle = items => { const p = h[items[0].dataIndex]; return p ? `${p.k} · ${fmtPct(p.pst)} das seções` : ""; };
+  const common = { responsive:true, maintainAspectRatio:false, animation:{duration:300}, interaction:{mode:"index", intersect:false},
+    plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title: tipTitle } } },
+    scales:{ x:{ type:"linear", min:0, max:xmax, ticks:{color:textCol, maxTicksLimit:11, callback:v=>v+"%"}, grid:{color:grid} } } };
+  const opts = JSON.parse(JSON.stringify(common));
+  opts.plugins.tooltip.callbacks = { title: tipTitle, label: it => ` ${it.dataset.label}: ${fmtPct(it.parsed.y)}` };
+  opts.scales.y = { min:lo, max:hi, ticks:{color:textCol, callback:v=>v+"%"}, grid:{color:grid} };
+  if (chart){ chart.data.datasets = datasets; chart.options = opts; chart.update(); }
+  else chart = new Chart($("chart").getContext("2d"), { type:"line", data:{datasets}, options:opts });
+
+  // vantagem (13 - 22)
+  const lead = h.map(p => ({x:p.pst, y:(p.c["13"]&&p.c["22"]) ? +(p.c["13"].pct - p.c["22"].pct).toFixed(3) : null}));
+  const c13 = cssVar("--c13"), c22 = cssVar("--c22");
+  const leadDs = [{ label:"Vantagem", data:lead, borderWidth:2, pointRadius: h.length>60?0:3, tension:.2, spanGaps:true,
+    segment:{ borderColor: c => ((c.p0.parsed.y + c.p1.parsed.y)/2 >= 0 ? c13 : c22) },
+    pointBackgroundColor: c => (c.parsed && c.parsed.y >= 0 ? c13 : c22), borderColor: textCol,
+    fill:{ target:{value:0}, above: c13+"22", below: c22+"22" } }];
+  const amp = Math.max(1, ...lead.map(p=>Math.abs(p.y||0)));
+  const lopts = JSON.parse(JSON.stringify(common));
+  lopts.plugins.tooltip.callbacks = { title: tipTitle, label: it => { const v = it.parsed.y; return ` ${v>=0?"Lula":"Flávio"} à frente por ${Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp`; } };
+  lopts.scales.y = { min:-Math.ceil(amp), max:Math.ceil(amp), ticks:{color:textCol, callback:v=>(v>0?"+":"")+v}, grid:{color: ctx => ctx.tick.value===0 ? textCol : grid} };
+  if (chartLead){ chartLead.data.datasets = leadDs; chartLead.options = lopts; chartLead.update(); }
+  else chartLead = new Chart($("chartLead").getContext("2d"), { type:"line", data:{datasets:leadDs}, options:lopts });
 }
 
 // ---------- Governador (UF selecionada) ----------
-async function loadEstConfig(){
-  if (estAbr) return estAbr;
-  try {
-    const cfg = await getJson(`${BASE}/comum/config/ele-c.json`);
-    const abr = new Set();
-    (function walk(o, inEle){
-      if (!o || typeof o!=="object") return;
-      if (Array.isArray(o)){ o.forEach(x=>walk(x,inEle)); return; }
-      const isTarget = inEle || String(o.cd)===ELE_EST && Array.isArray(o.abr);
-      if (isTarget && Array.isArray(o.abr)) o.abr.forEach(a => { const c = a.cd||a.uf; if (c) abr.add(String(c).toLowerCase()); });
-      Object.values(o).forEach(v => walk(v, isTarget && !Array.isArray(o.abr) ? isTarget : false));
-    })(cfg,false);
-    estAbr = abr;
-  } catch(_) { estAbr = new Set(); }
-  return estAbr;
-}
+// UFs com 2º turno para governador, conforme ele-c.json (eleição 6260).
+const GOV_UFS = new Set(["am","rn","df","es","ac","to"]);
 async function updateGov(){
   const card = $("govCard");
-  if (uf==="br"||uf==="zz"){ card.hidden=true; return; }
-  const abr = await loadEstConfig();
-  if (!abr.has(uf)){ card.hidden=true; return; }
+  if (!GOV_UFS.has(uf)){ card.hidden=true; return; }
   try {
     const d = parse(await getJson(fileUrl(uf, ELE_EST, CARGO_GOV)));
     if (!d.cands.length){ card.hidden=true; return; }
     card.hidden=false;
     $("govTitle").textContent = `Governador · ${NAME[uf]}`;
-    $("govProg").textContent = `${fmtPct(d.pst)} das seções · ${d.key}`;
+    $("govProg").textContent = `${fmtPct(d.pst)} das seções · ${d.key}` + (d.md ? " · matematicamente definido" : "");
     const b = $("govBoard"); b.innerHTML="";
     d.cands.forEach((c,i)=>{
       const el=document.createElement("div"); el.className="cand"+(i===0&&d.st>0?" lead":""); el.style.setProperty("--cc", EXTRA[i%EXTRA.length]);
       el.innerHTML=`<div class="photo"><span>${c.n}</span></div><div style="min-width:0"><div class="nm">${c.nm} ${c.e==="s"?'<span class="pill ok">eleito</span>':""}</div>
-        <div class="party">${c.n}</div><div class="pct">${fmtPct(c.pct)}</div><div class="votes">${fmtInt(c.vap)} votos</div>
+        <div class="party">${c.n}${c.vice?` · vice: ${c.vice}`:""}</div><div class="pct">${fmtPct(c.pct)}</div><div class="votes">${fmtInt(c.vap)} votos</div>
         <div class="bar"><i style="width:${Math.min(100,c.pct).toFixed(2)}%"></i></div></div>`;
       if (c.sq){ const img=new Image(); img.alt=""; img.onload=()=>{const p=el.querySelector(".photo");p.innerHTML="";p.appendChild(img);}; img.src=photoUrl(ELE_EST,c.sq); }
       b.appendChild(el);
@@ -497,18 +544,54 @@ async function updateGov(){
   } catch(_){ card.hidden=true; }
 }
 
-// ---------- Tabela por UF ----------
+// ---------- Estados: regiões + barras divergentes + tabela ----------
+const REGIONS = { "Norte":["ac","am","ap","pa","ro","rr","to"], "Nordeste":["al","ba","ce","ma","pb","pe","pi","rn","se"],
+  "Centro-Oeste":["df","go","ms","mt"], "Sudeste":["es","mg","rj","sp"], "Sul":["pr","rs","sc"] };
+const SIGLA = Object.fromEntries(UFS.map(([c])=>[c,c.toUpperCase()]));
+let ufsLoading = false;
 async function loadUfs(){
+  if (ufsLoading) return; ufsLoading = true;
   const btn = $("loadUfs"), tb = $("ufTable").querySelector("tbody"), st = $("ufsStatus");
   btn.disabled = true; st.textContent = "carregando…";
   const list = UFS.filter(([c])=>c!=="br");
   const results = [];
-  for (let i=0;i<list.length;i+=6){
-    const batch = list.slice(i,i+6);
-    const rs = await Promise.all(batch.map(async ([cd,nm]) => { try { return [cd,nm,parse(await getJson(fileUrl(cd, ELE_FED, CARGO_PRES)))]; } catch(e){ return [cd,nm,null]; } }));
+  for (let i=0;i<list.length;i+=7){
+    const rs = await Promise.all(list.slice(i,i+7).map(async ([cd,nm]) => { try { return [cd,nm,parse(await getJson(fileUrl(cd, ELE_FED, CARGO_PRES)))]; } catch(e){ return [cd,nm,null]; } }));
     results.push(...rs);
   }
-  const c13 = cssVar("--c13"), c22 = cssVar("--c22");
+  const c13 = cssVar("--c13"), c22 = cssVar("--c22"), textCol = cssVar("--fg-2"), grid = cssVar("--line");
+  const byUf = Object.fromEntries(results.map(r=>[r[0],r[2]]));
+  const vapOf = (d,n) => { const c = d && d.cands.find(c=>c.n===n); return c ? c.vap : 0; };
+
+  // regiões (soma de votos / soma de válidos; urnas = soma st / soma ts)
+  $("regions").innerHTML = Object.entries(REGIONS).map(([nm, ufs]) => {
+    let v13=0, v22=0, vv=0, st=0, ts=0;
+    ufs.forEach(u => { const d = byUf[u]; if (!d) return; v13+=vapOf(d,"13"); v22+=vapOf(d,"22"); vv+=d.validos; st+=d.st; ts+=d.ts; });
+    const p13 = vv>0 ? v13/vv*100 : 0, p22 = vv>0 ? v22/vv*100 : 0, pst = ts>0 ? st/ts*100 : 0;
+    const lead = p13>p22 ? c13 : p22>p13 ? c22 : "inherit";
+    return `<div class="region"><div class="label">${nm} <span class="num" style="float:right">${fmtPct(pst,1)} urnas</span></div>
+      <div class="r"><span style="color:${c13}">Lula ${fmtPct(p13)}</span><span style="color:${c22}">Flávio ${fmtPct(p22)}</span></div>
+      <div class="bar"><i style="width:${p13.toFixed(2)}%;background:${c13}"></i><i style="width:${p22.toFixed(2)}%;background:${c22}"></i></div>
+      <div class="small num" style="color:${lead};margin-top:4px">${p13===p22?"empate":(p13>p22?"Lula":"Flávio")} +${Math.abs(p13-p22).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp</div></div>`;
+  }).join("");
+
+  // barras divergentes por UF
+  const rows = results.filter(r=>r[2] && r[2].st>0).map(([cd,nm,d]) => {
+    const l = d.cands.find(c=>c.n==="13"), f = d.cands.find(c=>c.n==="22");
+    return {cd, nm, d, lp: l?l.pct:0, fp: f?f.pct:0, diff: (l?l.pct:0)-(f?f.pct:0)};
+  }).sort((a,b)=>b.diff-a.diff);
+  const ds = [{ data: rows.map(r=>+r.diff.toFixed(2)), backgroundColor: rows.map(r=>r.diff>=0?c13:c22), borderRadius:3, barThickness:12 }];
+  const labels = rows.map(r=>SIGLA[r.cd]);
+  const amp = Math.max(5, ...rows.map(r=>Math.abs(r.diff)));
+  const uopts = { indexAxis:"y", responsive:true, maintainAspectRatio:false, animation:{duration:300},
+    plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title: it => rows[it[0].dataIndex].nm,
+      label: it => { const r = rows[it.dataIndex]; return [` Lula ${fmtPct(r.lp)} · Flávio ${fmtPct(r.fp)}`, ` ${fmtPct(r.d.pst)} das seções apuradas`]; } } } },
+    scales:{ x:{ min:-Math.ceil(amp), max:Math.ceil(amp), ticks:{color:textCol, callback:v=>(v>0?"+":"")+v+" pp"}, grid:{color: c => c.tick.value===0 ? textCol : grid} },
+             y:{ ticks:{color:textCol, autoSkip:false, font:{family:"IBM Plex Mono", size:11}}, grid:{display:false} } } };
+  if (chartUf){ chartUf.data.labels = labels; chartUf.data.datasets = ds; chartUf.options = uopts; chartUf.update(); }
+  else chartUf = new Chart($("chartUf").getContext("2d"), { type:"bar", data:{labels, datasets:ds}, options:uopts });
+
+  // tabela
   tb.innerHTML = results.map(([cd,nm,d]) => {
     if (!d) return `<tr><td>${nm}</td><td colspan="6" class="muted">sem dados</td></tr>`;
     const l = d.cands.find(c=>c.n==="13"), f = d.cands.find(c=>c.n==="22");
@@ -520,9 +603,8 @@ async function loadUfs(){
       <td class="num" style="color:${diff>0?c13:diff<0?c22:"inherit"};font-weight:600">${lead} ${Math.abs(diff).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp</td>
       <td class="num">${fmtInt(d.validos)}</td><td class="num">${d.hg||"—"}</td></tr>`;
   }).join("");
-  $("ufTable").hidden = false; $("ufHint").hidden = true;
   st.textContent = `atualizado ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}`;
-  btn.textContent = "Atualizar"; btn.disabled = false;
+  btn.disabled = false; ufsLoading = false;
   if (!ufsTimer) ufsTimer = setInterval(loadUfs, 180000);
 }
 $("loadUfs").addEventListener("click", loadUfs);
@@ -551,10 +633,11 @@ async function update(manual){
 }
 setInterval(() => { const s = Math.max(0, Math.ceil((nextAt - Date.now())/1000)); $("countdown").textContent = nextAt ? `${s}s` : "—"; }, 500);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() > nextAt) update(); });
-window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (chart){ chart.destroy(); chart=null; } renderHistory(); update(); });
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { for (const c of [chart,chartLead,chartUf]) c && c.destroy(); chart=chartLead=chartUf=null; renderHistory(); update(); loadUfs(); });
 
 renderHistory();
 update(true);
+loadUfs();
 })();
 </script>
 </body>
