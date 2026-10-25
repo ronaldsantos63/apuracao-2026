@@ -95,7 +95,8 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--c22);outline-o
 .margin b{font-family:var(--mono);font-size:1.15rem;font-weight:600;display:block}
 
 /* Stat tiles */
-.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:820px){.tiles{grid-template-columns:repeat(2,1fr)}}
 .tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;min-width:0}
 .tile b{display:block;font-family:var(--mono);font-size:1.25rem;font-weight:600;margin-top:2px}
 .tile span.sub{color:var(--fg-3);font-size:.75rem;font-family:var(--mono)}
@@ -199,7 +200,7 @@ footer a{color:var(--fg-2)}
     </div>
     <div class="small muted num" id="progTxt">— de — seções</div>
     <div class="margin">
-      <div><span class="label">Vantagem</span><b class="num" id="leadVotes">—</b><span class="small muted">votos</span></div>
+      <div><span class="label">Vantagem</span><b class="num" id="leadVotes">—</b><span class="small muted" id="leadWho">votos</span></div>
       <div><span class="label">Diferença</span><b class="num" id="leadPp">—</b><span class="small muted">pontos percentuais (válidos)</span></div>
       <div><span class="label">Votos ainda não apurados</span><b class="num" id="remainEst">—</b><span class="small muted">estimativa pela média por seção</span></div>
       <div><span class="label">Situação</span><b id="mathStatus">—</b><span class="small muted" id="mathNote">estimativa própria, não oficial</span></div>
@@ -302,7 +303,7 @@ const ELE_FED = "6258";   // 2º turno — Presidente
 const ELE_EST = "6260";   // 2º turno — Governadores
 const CARGO_PRES = "0001", CARGO_GOV = "0003";
 const POLL_MS = 30000;
-const APP_VERSION = 5; // incrementar a cada publicação; version.json deve acompanhar
+const APP_VERSION = 6; // incrementar a cada publicação; version.json deve acompanhar
 const UFS = [
   ["br","Brasil"],["ac","Acre"],["al","Alagoas"],["am","Amazonas"],["ap","Amapá"],["ba","Bahia"],["ce","Ceará"],["df","Distrito Federal"],
   ["es","Espírito Santo"],["go","Goiás"],["ma","Maranhão"],["mg","Minas Gerais"],["ms","Mato Grosso do Sul"],["mt","Mato Grosso"],["pa","Pará"],
@@ -446,7 +447,7 @@ function renderBoard(d){
   // vantagem
   if (leader && second && d.st>0){
     const diffV = leader.vap - second.vap, diffP = leader.pct - second.pct;
-    $("leadVotes").textContent = fmtInt(diffV) + " · " + leader.nm.split(" ")[0];
+    $("leadVotes").textContent = fmtInt(diffV); $("leadWho").textContent = `votos · ${leader.nm.split(" ")[0]} à frente`;
     $("leadPp").textContent = diffP.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2}) + " pp";
     const remainSec = Math.max(0, d.ts - d.st);
     const perSec = d.st>0 ? d.validos/d.st : 0;
@@ -461,7 +462,7 @@ function renderBoard(d){
     $("mathStatus").innerHTML = `<span class="pill ${cls}">${txt}</span>`;
     $("mathNote").textContent = note;
   } else {
-    ["leadVotes","leadPp","remainEst"].forEach(id=>$(id).textContent="—");
+    ["leadVotes","leadPp","remainEst"].forEach(id=>$(id).textContent="—"); $("leadWho").textContent = "votos";
     $("mathStatus").innerHTML = `<span class="pill">aguardando urnas</span>`;
   }
 
@@ -514,7 +515,8 @@ function renderHistory(){
     const p = h[i], prev = h[i-1];
     const parts = Object.keys(p.c).sort().map(n => {
       const cur = p.c[n].pct, d = prev && prev.c[n] ? cur - prev.c[n].pct : null;
-      const dtxt = d==null ? "" : `<span class="d ${d>0?"up":d<0?"down":""}">${d>0?"+":""}${d.toFixed(2)}</span>`;
+      const dr = d==null ? null : Math.round(d*100)/100;
+      const dtxt = dr==null ? "" : (dr===0 ? `<span class="d">=</span>` : `<span class="d ${dr>0?"up":"down"}">${dr>0?"+":"−"}${Math.abs(dr).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`);
       const first = (p.c[n].nm||n).split(" ")[0];
       return `<span style="color:${colorFor(n,0)};font-weight:600">${first}</span> <span class="num">${fmtPct(cur)}</span> ${dtxt}`;
     });
@@ -538,10 +540,11 @@ function drawChart(h){
   const xmin = xs.length ? Math.max(0, Math.floor(Math.min(...xs))) : 0;
   const xmax = xs.length ? Math.min(100, Math.ceil(Math.max(...xs)) + 1) : 100;
   const tipTitle = items => { const p = h[items[0].dataIndex]; return p ? `${p.k} · ${fmtPct(p.pst)} das seções` : ""; };
-  const common = { responsive:true, maintainAspectRatio:false, animation:{duration:300}, interaction:{mode:"index", intersect:false},
+  const common = () => ({ responsive:true, maintainAspectRatio:false, animation:{duration:300}, interaction:{mode:"index", intersect:false},
     plugins:{ legend:{display:false}, tooltip:{ callbacks:{ title: tipTitle } } },
-    scales:{ x:{ type:"linear", min:xmin, max:Math.max(xmax, xmin+2), ticks:{color:textCol, maxTicksLimit:11, callback:v=>v+"%"}, grid:{color:grid} } } };
-  const opts = JSON.parse(JSON.stringify(common));
+    scales:{ x:{ type:"linear", min:xmin, max:Math.max(xmax, xmin+2), ticks:{color:textCol, maxTicksLimit:11, callback:v=>v+"%"}, grid:{color:grid},
+                 title:{display:true, text:"seções apuradas", color:textCol, font:{size:11}} } } });
+  const opts = common();
   opts.plugins.tooltip.callbacks = { title: tipTitle, label: it => ` ${it.dataset.label}: ${fmtPct(it.parsed.y)}` };
   opts.scales.y = { min:lo, max:hi, ticks:{color:textCol, callback:v=>v+"%"}, grid:{color:grid} };
   if (chart){ chart.data.datasets = datasets; chart.options = opts; chart.update(); }
@@ -555,7 +558,7 @@ function drawChart(h){
     pointBackgroundColor: c => (c.parsed && c.parsed.y >= 0 ? c13 : c22), borderColor: textCol,
     fill:{ target:{value:0}, above: c13+"22", below: c22+"22" } }];
   const amp = Math.max(1, ...lead.map(p=>Math.abs(p.y||0)));
-  const lopts = JSON.parse(JSON.stringify(common));
+  const lopts = common();
   lopts.plugins.tooltip.callbacks = { title: tipTitle, label: it => { const v = it.parsed.y; return ` ${v>=0?"Lula":"Flávio"} à frente por ${Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp`; } };
   lopts.scales.y = { min:-Math.ceil(amp), max:Math.ceil(amp), ticks:{color:textCol, callback:v=>(v>0?"+":"")+v}, grid:{color: ctx => ctx.tick.value===0 ? textCol : grid} };
   if (chartLead){ chartLead.data.datasets = leadDs; chartLead.options = lopts; chartLead.update(); }
