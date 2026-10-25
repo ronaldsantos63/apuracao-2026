@@ -131,6 +131,18 @@ button:focus-visible,select:focus-visible{outline:2px solid var(--c22);outline-o
 .region .bar{height:6px;display:flex;gap:2px;border-radius:3px;overflow:hidden;margin-top:6px;background:var(--surface-2)}
 .region .bar i{display:block;height:100%}
 details summary{cursor:pointer;color:var(--fg-2);font-size:.85rem;margin-top:10px}
+.proj{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:620px){.proj{grid-template-columns:1fr}}
+.projc{border-left:5px solid var(--cc);border-radius:var(--radius);padding:12px 14px;background:var(--surface-2)}
+.projc .nm{font-weight:700}
+.projc .pct{font-family:var(--mono);font-size:1.9rem;font-weight:600;color:var(--cc);line-height:1.1}
+.projc .sub{font-family:var(--mono);font-size:.8rem;color:var(--fg-2)}
+.hint{font-size:.82rem;color:var(--fg-2);line-height:1.5;margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:8px}
+.hint b{color:var(--fg)}
+.conf{display:inline-block;height:8px;width:120px;border-radius:4px;background:var(--surface-2);vertical-align:middle;overflow:hidden}
+.conf i{display:block;height:100%;background:var(--ok)}
+.banner{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:20;background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.85rem;box-shadow:0 4px 18px #0005}
+.banner button{margin-left:10px;background:var(--bg);color:var(--fg);border:0}
 .tablewrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:.85rem;min-width:560px}
 th,td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
@@ -191,7 +203,18 @@ footer a{color:var(--fg-2)}
       <div><span class="label">Diferença</span><b class="num" id="leadPp">—</b><span class="small muted">pontos percentuais (válidos)</span></div>
       <div><span class="label">Votos ainda não apurados</span><b class="num" id="remainEst">—</b><span class="small muted">estimativa pela média por seção</span></div>
       <div><span class="label">Situação</span><b id="mathStatus">—</b><span class="small muted" id="mathNote">estimativa própria, não oficial</span></div>
+      <div><span class="label">Ritmo</span><b class="num" id="pace">—</b><span class="small muted">seções por minuto (últimos 5 min)</span></div>
+      <div><span class="label">Término estimado</span><b class="num" id="eta">—</b><span class="small muted">se o ritmo atual se mantiver</span></div>
     </div>
+  </section>
+
+  <section class="card" id="projCard">
+    <div class="card-head"><h2>Projeção de resultado final</h2><span class="small muted" id="projStatus">aguardando dados por estado…</span></div>
+    <div class="proj" id="proj"></div>
+    <div class="small muted" style="margin-top:10px">Confiança <span class="conf"><i id="confBar" style="width:0"></i></span> <span class="num" id="confTxt">—</span></div>
+    <div class="hint" id="projHint"><b>Como é calculada:</b> para cada estado, assume que as seções ainda não apuradas votam como as já apuradas naquele estado, e soma os 27 estados mais o exterior.
+      Isso corrige o viés de ordem (o Nordeste costuma apurar antes do Sudeste), mas <b>não</b> corrige diferenças entre capital e interior dentro do estado, que costumam entrar em momentos diferentes.
+      Não é projeção oficial. Fica razoável acima de ~50% das seções em cada região e boa acima de ~80%. Quando o TSE declarar "matematicamente definido", a flag oficial aparece no card Situação.</div>
   </section>
 
   <section class="card">
@@ -279,6 +302,7 @@ const ELE_FED = "6258";   // 2º turno — Presidente
 const ELE_EST = "6260";   // 2º turno — Governadores
 const CARGO_PRES = "0001", CARGO_GOV = "0003";
 const POLL_MS = 30000;
+const APP_VERSION = 5; // incrementar a cada publicação; version.json deve acompanhar
 const UFS = [
   ["br","Brasil"],["ac","Acre"],["al","Alagoas"],["am","Amazonas"],["ap","Amapá"],["ba","Bahia"],["ce","Ceará"],["df","Distrito Federal"],
   ["es","Espírito Santo"],["go","Goiás"],["ma","Maranhão"],["mg","Minas Gerais"],["ms","Mato Grosso do Sul"],["mt","Mato Grosso"],["pa","Pará"],
@@ -441,6 +465,21 @@ function renderBoard(d){
     $("mathStatus").innerHTML = `<span class="pill">aguardando urnas</span>`;
   }
 
+  // ritmo / ETA (a partir do histórico salvo neste navegador)
+  (() => {
+    const h = loadHist(); const now = Date.now();
+    const ref = [...h].reverse().find(p => now - p.at >= 5*60000) || h[0];
+    const last = h[h.length-1];
+    if (!ref || !last || last.at - ref.at < 60000 || final){ $("pace").textContent = final ? "concluído" : "—"; $("eta").textContent = final ? "—" : "—"; return; }
+    const perMin = (last.st - ref.st) / ((last.at - ref.at)/60000);
+    $("pace").textContent = perMin > 0 ? fmtInt(perMin) : "—";
+    if (perMin > 0){
+      const mins = (d.ts - d.st) / perMin;
+      const eta = new Date(now + mins*60000);
+      $("eta").textContent = mins < 1 ? "agora" : `${eta.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})} (${mins >= 60 ? Math.floor(mins/60)+"h"+String(Math.round(mins%60)).padStart(2,"0") : Math.round(mins)+" min"})`;
+    } else $("eta").textContent = "—";
+  })();
+
   // tiles
   const tv = !isNaN(d.tv) && d.tv>0 ? d.tv : (d.validos + (d.vb||0) + (d.vn||0));
   const pOf = (x,base) => base>0 && !isNaN(x) ? fmtPct(x/base*100) : "";
@@ -547,6 +586,42 @@ async function updateGov(){
   } catch(_){ card.hidden=true; }
 }
 
+// ---------- Projeção: seções restantes de cada UF votam como as já apuradas na UF ----------
+function renderProjection(results, byUf, vapOf, c13, c22){
+  let p13=0, p22=0, cur13=0, cur22=0, curVV=0, minRegPst = 100, weightedPst = 0, totTs = 0;
+  const regPst = {};
+  for (const [cd,,d] of results){
+    if (!d || d.ts <= 0) continue;
+    totTs += d.ts;
+    if (d.st <= 0){ regPst[cd] = 0; continue; }
+    const f = d.ts / d.st;              // fator de expansão da UF
+    p13 += vapOf(d,"13") * f; p22 += vapOf(d,"22") * f;
+    cur13 += vapOf(d,"13"); cur22 += vapOf(d,"22"); curVV += d.validos;
+    regPst[cd] = d.st / d.ts * 100;
+  }
+  Object.values(REGIONS).forEach(ufs => {
+    let st=0, ts=0; ufs.forEach(u => { const d = byUf[u]; if (d){ st += d.st; ts += d.ts; } });
+    if (ts>0) minRegPst = Math.min(minRegPst, st/ts*100);
+  });
+  const tot = p13 + p22;
+  const el = $("proj"), stt = $("projStatus");
+  if (!(tot > 0)){ el.innerHTML = ""; stt.textContent = "sem seções apuradas ainda"; return; }
+  const pp13 = p13/tot*100, pp22 = p22/tot*100, diff = pp13 - pp22;
+  const c13p = curVV>0 ? cur13/curVV*100 : 0, c22p = curVV>0 ? cur22/curVV*100 : 0;
+  const lead = diff >= 0 ? "Lula" : "Flávio";
+  el.innerHTML = [["13","LULA",pp13,c13p,c13],["22","FLÁVIO BOLSONARO",pp22,c22p,c22]].map(([n,nm,p,c,col]) =>
+    `<div class="projc" style="--cc:${col}"><div class="nm">${nm}${(n==="13")===(diff>=0)?' <span class="pill">projetado à frente</span>':""}</div>
+      <div class="pct">${fmtPct(p)}</div>
+      <div class="sub">apurado agora: ${fmtPct(c)} · ${p-c>=0?"+":""}${(p-c).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp na projeção</div></div>`).join("");
+  stt.innerHTML = `<span class="num">${lead} +${Math.abs(diff).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})} pp</span> · região menos apurada: ${fmtPct(minRegPst,1)}`;
+  // confiança: cresce com a região menos apurada e cai quando a projeção está perto do empate
+  let conf = Math.min(1, minRegPst/85);
+  if (Math.abs(diff) < 1) conf *= 0.6; else if (Math.abs(diff) < 2) conf *= 0.8;
+  $("confBar").style.width = (conf*100).toFixed(0)+"%";
+  $("confBar").style.background = conf < .4 ? "var(--bad)" : conf < .7 ? "var(--warn)" : "var(--ok)";
+  $("confTxt").textContent = conf < .4 ? "baixa" : conf < .7 ? "média" : "alta";
+}
+
 // ---------- Estados: regiões + barras divergentes + tabela ----------
 const REGIONS = { "Norte":["ac","am","ap","pa","ro","rr","to"], "Nordeste":["al","ba","ce","ma","pb","pe","pi","rn","se"],
   "Centro-Oeste":["df","go","ms","mt"], "Sudeste":["es","mg","rj","sp"], "Sul":["pr","rs","sc"] };
@@ -565,6 +640,7 @@ async function loadUfs(){
   const c13 = cssVar("--c13"), c22 = cssVar("--c22"), textCol = cssVar("--fg-2"), grid = cssVar("--line");
   const byUf = Object.fromEntries(results.map(r=>[r[0],r[2]]));
   const vapOf = (d,n) => { const c = d && d.cands.find(c=>c.n===n); return c ? c.vap : 0; };
+  renderProjection(results, byUf, vapOf, c13, c22);
 
   // regiões (soma de votos / soma de válidos; urnas = soma st / soma ts)
   $("regions").innerHTML = Object.entries(REGIONS).map(([nm, ufs]) => {
@@ -636,6 +712,24 @@ async function update(manual){
   nextAt = Date.now() + POLL_MS;
   timer = setTimeout(update, POLL_MS);
 }
+let newVerShown = false;
+async function checkVersion(){
+  try {
+    const r = await fetch(`version.json?t=${Date.now()}`, {cache:"no-store"});
+    if (!r.ok) return;
+    const j = await r.json();
+    if (j.v > APP_VERSION && !newVerShown){
+      newVerShown = true;
+      const b = document.createElement("div"); b.className = "banner";
+      b.innerHTML = `Nova versão da página publicada. Atualizando em <span class="num" id="relCount">15</span> s… <button id="relNow">Atualizar agora</button>`;
+      document.body.appendChild(b);
+      const go = () => location.reload();
+      $("relNow").addEventListener("click", go);
+      let n = 15; const t = setInterval(() => { n--; const c = $("relCount"); if (c) c.textContent = n; if (n <= 0){ clearInterval(t); go(); } }, 1000);
+    }
+  } catch(_){}
+}
+setInterval(checkVersion, 60000); checkVersion();
 setInterval(() => { const s = Math.max(0, Math.ceil((nextAt - Date.now())/1000)); $("countdown").textContent = nextAt ? `${s}s` : "—"; }, 500);
 document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() > nextAt) update(); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { for (const c of [chart,chartLead,chartUf]) c && c.destroy(); chart=chartLead=chartUf=null; renderHistory(); update(); loadUfs(); });
