@@ -241,6 +241,7 @@ footer a{color:var(--fg-2)}
       <div class="legend" id="legend"></div>
       <div class="chartbox"><canvas id="chart" role="img" aria-label="Percentual de votos válidos por candidato ao longo da apuração"></canvas></div>
       <p class="small muted" id="chartEmpty">O histórico começa quando esta página captura a primeira atualização. Ele fica salvo neste navegador.</p>
+      <p class="small muted" id="chartNote"></p>
       <div class="card-head" style="margin-top:14px"><h2>Vantagem do líder</h2><span class="small muted">pontos percentuais · acima de zero = Lula, abaixo = Flávio</span></div>
       <div class="chartbox short"><canvas id="chartLead" role="img" aria-label="Diferença em pontos percentuais entre os candidatos ao longo da apuração"></canvas></div>
     </div>
@@ -303,7 +304,7 @@ const ELE_FED = "6258";   // 2º turno — Presidente
 const ELE_EST = "6260";   // 2º turno — Governadores
 const CARGO_PRES = "0001", CARGO_GOV = "0003";
 const POLL_MS = 30000;
-const APP_VERSION = 6; // incrementar a cada publicação; version.json deve acompanhar
+const APP_VERSION = 7; // incrementar a cada publicação; version.json deve acompanhar
 const UFS = [
   ["br","Brasil"],["ac","Acre"],["al","Alagoas"],["am","Amazonas"],["ap","Amapá"],["ba","Bahia"],["ce","Ceará"],["df","Distrito Federal"],
   ["es","Espírito Santo"],["go","Goiás"],["ma","Maranhão"],["mg","Minas Gerais"],["ms","Mato Grosso do Sul"],["mt","Mato Grosso"],["pa","Pará"],
@@ -390,11 +391,32 @@ $("clearHist").addEventListener("click", () => { try{localStorage.removeItem(his
 
 // ---------- Histórico (linha do tempo) ----------
 const histKey = () => `apuracao2026:hist:${ELE_FED}:${uf}`;
-function loadHist(){ try { return JSON.parse(localStorage.getItem(histKey()) || "[]"); } catch(_){ return []; } }
-function saveHist(h){ try { localStorage.setItem(histKey(), JSON.stringify(h.slice(-600))); } catch(_){} }
+let shared = [];   // série compartilhada (data/historico.json, gravada pela GitHub Action) — só Brasil
+function loadHist(){
+  let local = []; try { local = JSON.parse(localStorage.getItem(histKey()) || "[]"); } catch(_){}
+  if (uf !== "br" || !shared.length) return local;
+  const seen = new Set(shared.map(p=>p.k));
+  const merged = shared.concat(local.filter(p => !seen.has(p.k) && p.c["13"] && p.c["22"]));
+  merged.sort((a,b) => a.st - b.st);
+  return merged;
+}
+function saveHist(h){ try { localStorage.setItem(histKey(), JSON.stringify(h.filter(p=>p.c["13"]&&p.c["22"]).slice(-900))); } catch(_){} }
+async function loadShared(){
+  try {
+    const r = await fetch(`data/historico.json?t=${Math.floor(Date.now()/60000)}`, {cache:"no-store"});
+    if (!r.ok) return;
+    const j = await r.json();
+    if (Array.isArray(j.pontos) && j.pontos.length){
+      const before = shared.length; shared = j.pontos;
+      $("chartNote").textContent = `Série compartilhada desde ${shared[0].hg} (${fmtPct(shared[0].pst,1)} das seções) · ${shared.length} pontos gravados no repositório + atualizações capturadas neste navegador.`;
+      if (shared.length !== before) renderHistory();
+    }
+  } catch(_){}
+}
+setInterval(loadShared, 120000);
 function pushHist(d){
   if (!d.key || d.st === 0) return false;
-  const h = loadHist();
+  let h = []; try { h = JSON.parse(localStorage.getItem(histKey()) || "[]"); } catch(_){}
   if (h.length && h[h.length-1].k === d.key) return false;
   const c = {}; d.cands.forEach(x => c[x.n] = {vap:x.vap, pct:+x.pct.toFixed(3), nm:x.nm});
   h.push({k:d.key, hg:d.hg, dg:d.dg, pst:+d.pst.toFixed(2), st:d.st, c, at:Date.now()});
@@ -508,7 +530,7 @@ function renderBoard(d){
 function renderHistory(){
   const h = loadHist();
   const tl = $("timeline");
-  $("chartEmpty").hidden = h.length > 1;
+  $("chartEmpty").hidden = h.length > 1 || shared.length > 0;
   if (!h.length){ tl.innerHTML = `<li><span class="muted">Sem atualizações capturadas ainda.</span></li>`; drawChart([]); return; }
   const rows = [];
   for (let i=h.length-1;i>=Math.max(0,h.length-40);i--){
@@ -737,8 +759,7 @@ setInterval(() => { const s = Math.max(0, Math.ceil((nextAt - Date.now())/1000))
 document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() > nextAt) update(); });
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { for (const c of [chart,chartLead,chartUf]) c && c.destroy(); chart=chartLead=chartUf=null; renderHistory(); update(); loadUfs(); });
 
-renderHistory();
-update(true);
+loadShared().then(() => { renderHistory(); update(true); });
 loadUfs();
 })();
 </script>
